@@ -1,0 +1,45 @@
+{
+    "manifest_version": 3,
+    "name": "Transplacer",
+    "version": "1.0",
+    "description": "Traduz automaticamente o texto selecionado via atalho ou menu de contexto e permite reverter a tradução.",
+    "permissions": [
+      "contextMenus",
+      "activeTab",
+      "scripting",
+      "storage",
+      "commands"
+    ],
+    "host_permissions":[
+        "https://api-free.deepl.com/*",
+        "https://api.deepl.com/*"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"]
+      }
+    ],
+    "commands": {
+      "translate-selection": {
+        "suggested_key": {
+          "default": "Alt+T"
+        },
+        "description": "Traduz o texto selecionado"
+      },
+      "revert-translation": {
+        "suggested_key": {
+            "default": "Alt+Shift+T"
+        },
+        "description": "Reverte a tradução"
+      }
+    },
+    "action": {
+      "default_title": "Transplace",
+      "default_popup": "popup.html"
+    }
+  }
+  

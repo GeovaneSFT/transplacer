@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            width: 250px;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+        }
+        .api-type-st {
+            display: flex;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #status {
+            margin-top: 10px;
+            color: #28a745;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="input-group">
+        <label for="api-key">Chave API DeepL:</label>
+        <input type="password" id="api-key" placeholder="Insira sua chave API">
+    </div>
+
+    <div class="input-group">
+        <label>Tipo de API:</label>
+        <div class="api-type-st">
+            <label><input type="radio" name="api-type" value="free" checked> Free</label>
+            <label><input type="radio" name="api-type" value="pro"> Pro</label>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <label for="source-lang">Idioma fonte (opcional):</label>
+        <select id="source-lang">
+            <option value="auto">Detectar automaticamente</option>
+            <option value="EN">Inglês</option>
+            <option value="PT">Português</option>
+            <option value="ES">Espanhol</option>
+            <option value="FR">Francês</option>
+            <option value="DE">Alemão</option>
+            <option value="JA">Japonês</option>
+        </select>
+    </div>
+
+    <div class="input-group">
+        <label for="target-lang">Idioma de destino padrão:</label>
+        <select id="target-lang">
+            <option value="EN-US">Inglês Americano</option>
+            <option value="EN-GB">Inglês Britânico</option>
+            <option value="PT-BR">Português</option>
+            <option value="ES">Espanhol</option>
+            <option value="FR">Francês</option>
+            <option value="DE">Alemão</option>
+            <option value="JA">Japonês</option>
+        </select>
+    </div>
+
+    <div class="input-group">
+        <label>Atalhos atuais:</label>
+        <input type="text" id="translate-shortcut" readonly placeholder="Atalho de tradução">
+        <input type="text" id="revert-shortcut" readonly placeholder="Atalho de reversão">
+        <small><a href="#" id="change-shortcut">(Alterar em configurações do Chrome)</a></small>
+    </div>
+
+    <button id="save">Salvar Configurações</button>
+    <div id="status"></div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
