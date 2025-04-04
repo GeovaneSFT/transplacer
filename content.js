@@ -2,6 +2,10 @@ const originalContentCache = new WeakMap();
 
 const translationCache = new Map();
 
+// Histórico de traduções para permitir múltiplos "ctrl+z"
+const translationHistory = [];
+const MAX_HISTORY_SIZE = 50; // Limite máximo do histórico
+
 
 function getTranslationKey(text, targetLang) {
     return `${text}|${targetLang}`;
@@ -33,9 +37,7 @@ function findOriginalText(element) {
 }
 
 function normalizeText(text) {
-    return text.split('\n')
-        .map(line => line.trim())
-        .join('\n')
+    return text.trim();
 }
 
 function isSameLanguageFamily(lang1, lang2) {
@@ -60,6 +62,15 @@ function showMessage(message, isError = false) {
     setTimeout(() => msgDiv.remove(), 3000);
 }
 
+function showHistoryCount() {
+    if (translationHistory.length > 0) {
+        showMessage(`Histórico: ${translationHistory.length} tradução(ões) podem ser desfeitas`);
+    }
+}
+let lastTranslatedContainer = null;
+
+let lastTranslatedRange = null;
+
 function translateSelection(targetLang = null) {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -68,7 +79,7 @@ function translateSelection(targetLang = null) {
     }
 
     const range = selection.getRangeAt(0);
-    const selectedText = selection.toString().trim();
+    const selectedText = selection.toString();
 
     if (selectedText.length === 0) {
         showMessage("Selecione um texto válido.", true);
@@ -117,7 +128,7 @@ function translateSelection(targetLang = null) {
                 range.commonAncestorContainer,
                 NodeFilter.SHOW_TEXT,
                 {
-                    acceptNode: function(node) {
+                    acceptNode: function (node) {
                         if (!node.textContent.trim()) {
                             return NodeFilter.FILTER_REJECT;
                         }
@@ -126,36 +137,83 @@ function translateSelection(targetLang = null) {
                 },
                 false
             );
-    
+
             let textFound = false;
             let node;
-            
+
             const originalLines = selectedText.split('\n');
             const translatedLines = response.translatedText.split('\n');
-    
-            while (node = walker.nextNode()) {
+
+            let lineIndex = 0;
+            while ((node = walker.nextNode()) && lineIndex < originalLines.length) {
+                const originalLine = originalLines[lineIndex];
+                const translatedLine = translatedLines[lineIndex] || '';
+
+                const originalTrimmed = originalLine.trim();
+                if (!originalTrimmed) {
+                    lineIndex++;
+                    continue;
+                }
+
                 const nodeText = node.textContent;
-                
-                for (let i = 0; i < originalLines.length; i++) {
-                    const originalLine = originalLines[i];
-                    const indentation = originalLine.match(/^\s*/)?.[0];
-                    const line = originalLine.trim();
-                    if (line && nodeText.includes(line)) {
+                if (nodeText.includes(originalTrimmed)) {
+                    const yamlLike = originalLine.match(/^(\s*)([^\s].*?):(.*)$/);
+
+                    if (yamlLike) {
+                        const [, indent, key] = yamlLike;
                         node.textContent = nodeText.replace(
-                            line,
-                            indentation + translatedLines[i].trim()
+                            originalTrimmed,
+                            `${indent}${key}: ${translatedLine.trim()}`
                         );
-                        textFound = true;
+                    } else {
+                        const indentation = originalLine.match(/^\s*/)?.[0] || '';
+                        node.textContent = nodeText.replace(
+                            originalTrimmed,
+                            indentation + translatedLine.trim()
+                        );
                     }
+
+                    lineIndex++;
+                    textFound = true;
                 }
             }
-    
+
             if (!textFound) {
-                const indentation = selectedText.match(/^\s*/)?.[0];
+                const lines = selectedText.split('\n');
+                const firstIndentation = lines[0].match(/^\s*/)?.[0] || '';
+                const translated = response.translatedText
+                    .split('\n')
+                    .map(line => firstIndentation + line)
+                    .join('\n');
+
+                const translatedNode = document.createElement('span');
+                translatedNode.textContent = translated;
+                translatedNode.setAttribute('data-original', selectedText);
+                translatedNode.setAttribute('data-target-lang', targetLang);
+                translatedNode.setAttribute('data-translation-id', Date.now().toString());
+                
                 range.deleteContents();
-                range.insertNode(document.createTextNode(indentation + response.translatedText));
+                range.insertNode(translatedNode);
+                
+                // Adiciona ao histórico de traduções
+                translationHistory.push({
+                    id: translatedNode.getAttribute('data-translation-id'),
+                    element: translatedNode,
+                    originalText: selectedText,
+                    translatedText: translated,
+                    targetLang: targetLang
+                });
+                
+                // Limita o tamanho do histórico
+                if (translationHistory.length > MAX_HISTORY_SIZE) {
+                    translationHistory.shift();
+                }
+                
+                // Mostra contador de histórico
+                showHistoryCount();
             }
 
+            lastTranslatedRange = range.cloneRange();
             selection.removeAllRanges();
 
             if (response.fromCache) {
@@ -168,24 +226,128 @@ function translateSelection(targetLang = null) {
 }
 
 function revertSelection() {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-        alert("Selecione o texto traduzido para reverter.");
-        return;
-    }
-
-    const container = selection.getRangeAt(0).commonAncestorContainer;
-    const originalContent = originalContentCache.get(container);
-
-    if (originalContent) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        range.insertNode(originalContent.node.cloneNode(true));
-        selection.removeAllRanges();
-        originalContentCache.delete(container);
+    // Verifica se há entradas no histórico
+    if (translationHistory.length > 0) {
+        // Obtém a entrada mais recente do histórico (topo da pilha)
+        const lastTranslation = translationHistory.pop();
+        
+        // Tenta encontrar o elemento pelo ID
+        const element = document.querySelector(`[data-translation-id="${lastTranslation.id}"]`);
+        
+        if (element) {
+            revertTranslatedElement(element, lastTranslation.originalText);
+            showMessage(`Tradução desfeita! (${translationHistory.length} restante(s) no histórico)`);
+            return;
+        } else {
+            // Se o elemento não for encontrado pelo ID, tenta usar a seleção atual
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const selectedNode = range.commonAncestorContainer;
+                
+                // Tenta encontrar o elemento traduzido a partir da seleção atual
+                const result = findTranslatedElementFromNode(selectedNode);
+                if (result.found) {
+                    revertTranslatedElement(result.element, result.originalText);
+                    selection.removeAllRanges();
+                    showMessage(`Tradução desfeita! (${translationHistory.length} restante(s) no histórico)`);
+                    return;
+                }
+            }
+            
+            // Se não houver seleção atual, tenta usar a última tradução
+            if (lastTranslatedRange) {
+                const node = lastTranslatedRange.commonAncestorContainer;
+                const result = findTranslatedElementFromNode(node);
+                
+                if (result.found) {
+                    revertTranslatedElement(result.element, result.originalText);
+                    lastTranslatedRange = null;
+                    showMessage(`Tradução desfeita! (${translationHistory.length} restante(s) no histórico)`);
+                    return;
+                }
+            }
+        }
     } else {
-        alert("O texto selecionado não foi traduzido ou não pode ser revertido.");
+        // Comportamento padrão quando não há histórico
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const selectedNode = range.commonAncestorContainer;
+            
+            const result = findTranslatedElementFromNode(selectedNode);
+            if (result.found) {
+                revertTranslatedElement(result.element, result.originalText);
+                selection.removeAllRanges();
+                showMessage("Texto restaurado ao original!");
+                return;
+            }
+        }
+        
+        if (lastTranslatedRange) {
+            const node = lastTranslatedRange.commonAncestorContainer;
+            const result = findTranslatedElementFromNode(node);
+            
+            if (result.found) {
+                revertTranslatedElement(result.element, result.originalText);
+                lastTranslatedRange = null;
+                showMessage("Texto restaurado ao original!");
+                return;
+            }
+        }
     }
+    
+    showMessage("Não foi possível encontrar o texto original. Selecione o texto traduzido.", true);
+}
+
+function findTranslatedElementFromNode(node) {
+    // Se o nó for um nó de texto, pegamos o elemento pai
+    let element = node;
+    if (element.nodeType === Node.TEXT_NODE) {
+        element = element.parentElement;
+    }
+    
+    // Procura pelo elemento traduzido mais próximo
+    while (element) {
+        // Verifica se o elemento atual tem o atributo data-original
+        if (element.hasAttribute && element.hasAttribute('data-original')) {
+            return {
+                found: true,
+                element: element,
+                originalText: element.getAttribute('data-original')
+            };
+        }
+        
+        // Verifica se algum elemento filho tem o atributo data-original
+        const translatedChild = element.querySelector('[data-original]');
+        if (translatedChild) {
+            return {
+                found: true,
+                element: translatedChild,
+                originalText: translatedChild.getAttribute('data-original')
+            };
+        }
+        
+        // Sobe para o elemento pai
+        element = element.parentElement;
+    }
+    
+    return { found: false };
+}
+
+function revertTranslatedElement(element, originalText) {
+    // Cria um nó de texto com o conteúdo original
+    const textNode = document.createTextNode(originalText);
+    
+    // Substitui o elemento traduzido pelo texto original
+    if (element.parentNode) {
+        element.parentNode.replaceChild(textNode, element);
+    }
+    
+    // Atualiza o contador de histórico após reverter
+    setTimeout(() => {
+        showHistoryCount();
+    }, 3500);
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
