@@ -33,7 +33,9 @@ function findOriginalText(element) {
 }
 
 function normalizeText(text) {
-    return text.trim().replace(/\s+/g, ' ');
+    return text.split('\n')
+        .map(line => line.trim())
+        .join('\n')
 }
 
 function isSameLanguageFamily(lang1, lang2) {
@@ -114,16 +116,44 @@ function translateSelection(targetLang = null) {
             const walker = document.createTreeWalker(
                 range.commonAncestorContainer,
                 NodeFilter.SHOW_TEXT,
-                null,
+                {
+                    acceptNode: function(node) {
+                        if (!node.textContent.trim()) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                },
                 false
             );
-
+    
+            let textFound = false;
             let node;
+            
+            const originalLines = selectedText.split('\n');
+            const translatedLines = response.translatedText.split('\n');
+    
             while (node = walker.nextNode()) {
-                if (node.textContent.includes(selectedText)) {
-                    node.textContent = node.textContent.replace(selectedText, response.translatedText);
-                    break;
+                const nodeText = node.textContent;
+                
+                for (let i = 0; i < originalLines.length; i++) {
+                    const originalLine = originalLines[i];
+                    const indentation = originalLine.match(/^\s*/)?.[0];
+                    const line = originalLine.trim();
+                    if (line && nodeText.includes(line)) {
+                        node.textContent = nodeText.replace(
+                            line,
+                            indentation + translatedLines[i].trim()
+                        );
+                        textFound = true;
+                    }
                 }
+            }
+    
+            if (!textFound) {
+                const indentation = selectedText.match(/^\s*/)?.[0];
+                range.deleteContents();
+                range.insertNode(document.createTextNode(indentation + response.translatedText));
             }
 
             selection.removeAllRanges();
