@@ -1,4 +1,4 @@
-> I wanted an extension that would allow me to select text and replace it with another language, but I didn't find one, so I created this
+> I wanted an extension that would allow me to select and translate texts in-place (right where they are), but I couldn't find any, so I created this one
 
 *Read this in other languages: [Portuguese](README.pt-br.md)*
 

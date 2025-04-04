@@ -1,6 +1,6 @@
-> Eu queria uma extensão que me permitisse selecionar texto e substituí-lo por outro idioma, mas não encontrei uma, então criei esta
+> Eu queria uma extensão que me permitisse selecionar e traduzir textos no local onde estão, mas não encontrei nenhuma, então criei esta
 
-*Leia isso em outros idiomas: [English](README.md)*
+*Leia em outros idiomas: [English](README.md)*
 
 # Transplacer
 
